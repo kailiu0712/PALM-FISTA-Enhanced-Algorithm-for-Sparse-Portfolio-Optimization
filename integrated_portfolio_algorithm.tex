@@ -1,0 +1,472 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\usepackage{enumitem}
+
+\begin{document}
+
+\section*{Integrated Algorithm for the Full Constrained Portfolio Problem}
+
+\subsection*{1. Problem solved by the code}
+
+The implementation solves the reduced portfolio problem
+\[
+\min_{x \in \mathbb{R}^n}
+\left\{
+\sigma^2 x^\top \Sigma x - \mu^\top x + \frac{1}{\gamma} g(x)
+\right\}
+\quad
+\text{s.t.}
+\quad
+x \in \Delta_n,
+\qquad
+l \le Ax \le u,
+\]
+where
+\[
+\Delta_n := \{x \in \mathbb{R}^n : x \ge 0,\ \mathbf{1}^\top x = 1\}.
+\]
+
+The penalty \(g(x)\) is the reduced form of the lifted model with auxiliary
+variables \(z\):
+\[
+g(x)
+=
+\frac12 \min_{z}
+\left\{
+\sum_{i=1}^n \frac{x_i^2}{z_i}
+:
+z_i \in [0,1],\quad
+\sum_{i=1}^n z_i \le k,\quad
+z_i \ge x_i
+\right\}.
+\]
+Intuitively:
+\begin{itemize}[topsep=0.3em,itemsep=0.2em]
+\item \(x \in \Delta_n\) keeps the portfolio long-only and fully invested;
+\item \(l \le Ax \le u\) imposes extra exposure bounds;
+\item \(g(x)\) is the nonlinear portfolio regularizer controlled by \(k\);
+\item \(\gamma\) scales how strongly that regularizer is enforced.
+\end{itemize}
+
+The code handles the linear exposure constraints by an outer augmented
+Lagrangian loop, and handles the simplex-constrained proximal step by a custom
+inner routine.
+
+\subsection*{2. Constraint encoding}
+
+The two-sided exposure constraints are rewritten as
+\[
+B :=
+\begin{bmatrix}
+A \\
+-A
+\end{bmatrix},
+\qquad
+b :=
+\begin{bmatrix}
+u \\
+-l
+\end{bmatrix},
+\qquad
+Bx - b \le 0.
+\]
+
+\subsection*{3. Outer proximal augmented Lagrangian model}
+
+At outer iteration \(r\), the code forms the smooth model
+\[
+\mathcal{L}_r(x)
+:=
+\sigma^2 x^\top \Sigma x - \mu^\top x
++
+\frac{1}{2\rho_r}\left\|[p^r + \rho_r(Bx-b)]_+\right\|_2^2
+-
+\frac{1}{2\rho_r}\|p^r\|_2^2
++
+\frac{1}{2\eta_r}\|x-x^r\|_2^2,
+\]
+and leaves the nonsmooth/simplex part in
+\[
+f_2(x) := \frac{1}{\gamma} g(x) + \delta_{\Delta_n}(x).
+\]
+
+Hence the primal subproblem is
+\[
+x^{r+1} \approx \arg\min_x \left\{ \mathcal{L}_r(x) + f_2(x) \right\}.
+\]
+
+The implementation solves this subproblem by FISTA. The key point is that the
+proximal step is \emph{not} a plain simplex projection; it is the prox of
+\(\tau g + \delta_{\Delta_n}\), evaluated by Moreau decomposition, PAVA, and a
+breakpoint walk in the simplex multiplier.
+
+\subsection*{4. How to read the inner prox}
+
+Given a gradient step \(v\), the inner routine must compute
+\[
+\operatorname{prox}_{\tau g + \delta_{\Delta_n}}(v)
+=
+\arg\min_{x \in \Delta_n}
+\left\{
+\frac12 \|x-v\|_2^2 + \tau g(x)
+\right\}.
+\]
+
+This is handled in two layers.
+
+\paragraph*{Free prox without the simplex equality.}
+First imagine dropping the constraint \(\mathbf{1}^\top x = 1\). Then we only
+need \(\operatorname{prox}_{\tau g}(w)\), which the code computes by Moreau's
+identity:
+\[
+\operatorname{prox}_{\tau g}(w)
+=
+w - \tau \operatorname{prox}_{g^\ast/\tau}(w/\tau).
+\]
+The conjugate-side prox \(\operatorname{prox}_{g^\ast/\tau}\) has a sorted
+block structure and is evaluated efficiently by PAVA.
+
+\paragraph*{Restoring the simplex equality.}
+To impose \(\mathbf{1}^\top x = 1\), introduce a scalar multiplier \(\nu\) and
+define
+\[
+\Phi(\nu) := \mathbf{1}^\top \operatorname{prox}_{\tau g}(v - \nu \mathbf{1}).
+\]
+The required prox is obtained by finding the unique root of
+\[
+\Phi(\nu) = 1.
+\]
+
+The expensive part would be recomputing the free prox from scratch for many
+trial values of \(\nu\). The code avoids this by observing that, after sorting,
+the path of \(\operatorname{prox}_{\tau g}(v - \nu \mathbf{1})\) changes only
+at finitely many breakpoints. Between breakpoints, \(\Phi(\nu)\) is affine.
+
+So the algorithm:
+\begin{itemize}[topsep=0.3em,itemsep=0.2em]
+\item starts from a right bracket \(\nu_R\) with \(\Phi(\nu_R) \le 1\);
+\item moves only toward smaller \(\nu\);
+\item tracks the current PAVA block partition;
+\item updates only two kinds of events: regime changes of a block, and merges
+of adjacent blocks;
+\item solves for the exact root as soon as it lies on the current affine
+  segment.
+\end{itemize}
+
+This is what the function
+\texttt{prox\_moreau\_simplex\_breakpoint\_walk} implements.
+
+\begin{algorithm}[H]
+\caption{Outer proximal augmented Lagrangian solver}
+\label{alg:outer_palm_portfolio}
+\KwIn{Data \(\Sigma,\mu,A,l,u,k,\sigma,\gamma\); feasible \(x^0 \in \Delta_n\) with \(l \le Ax^0 \le u\); penalty \(\rho_0 > 0\); proximal parameter \(\eta_0 > 0\); tolerances \(\varepsilon_{\mathrm{outer}}, \varepsilon_{\mathrm{inner}}\)}
+\KwOut{Approximate solution \(x^\star\)}
+
+\BlankLine
+\tcp{Encode the two-sided exposure constraints}
+\(
+B \leftarrow
+\begin{bmatrix}
+A \\
+-A
+\end{bmatrix}
+\),
+\(
+b \leftarrow
+\begin{bmatrix}
+u \\
+-l
+\end{bmatrix}
+\)
+\;
+
+\BlankLine
+\tcp{Initialization}
+\(r \leftarrow 0\) \;
+\(x^r \leftarrow x^0\) \;
+\(p^r \leftarrow 0\) \;
+\(\rho_r \leftarrow \rho_0\), \(\eta_r \leftarrow \eta_0\) \;
+\(\nu^{\mathrm{warm}} \leftarrow \texttt{None}\) \;
+\(E^r \leftarrow \min\{b - Bx^r,\ p^r\}\) \;
+\(x^{\mathrm{init}} \leftarrow x^0\) \;
+
+\BlankLine
+\While{not converged}{
+    \tcp{Current Lipschitz constant used by the inner FISTA loop}
+    \[
+    L_r \leftarrow 2 \sigma^2 \lambda_{\max}(\Sigma) + \rho_r \|B\|_2^2 + \eta_r^{-1}.
+    \]
+
+    \BlankLine
+    \tcp{Approximately solve the primal subproblem}
+    \(
+    (x^{r+1}, \texttt{diag})
+    \leftarrow
+    \textsc{InnerFISTA}(x^r, p^r, \rho_r, \eta_r, \nu^{\mathrm{warm}}, \varepsilon_{\mathrm{inner}})
+    \)
+    \;
+    \If{\(\texttt{diag.last\_nu}\) is finite}{
+        \(\nu^{\mathrm{warm}} \leftarrow \texttt{diag.last\_nu}\) \;
+    }
+
+    \BlankLine
+    \tcp{Multiplier update for \(Bx-b \le 0\)}
+    \[
+    p^{r+1} \leftarrow [p^r + \rho_r(Bx^{r+1} - b)]_+ .
+    \]
+
+    \BlankLine
+    \tcp{Residuals checked by the implementation}
+    \[
+    r_{\mathrm{stat}} \leftarrow \|x^{r+1} - x^r\|_2,
+    \qquad
+    r_{\Delta} \leftarrow |\mathbf{1}^\top x^{r+1} - 1|,
+    \]
+    \[
+    r_{\mathrm{exp}} \leftarrow
+    \max\!\left\{
+    \|(Ax^{r+1} - u)_+\|_\infty,\,
+    \|(l - Ax^{r+1})_+\|_\infty
+    \right\}.
+    \]
+
+    \BlankLine
+    \If{\(r_{\mathrm{stat}} \le \varepsilon_{\mathrm{outer}}\) and \(r_{\Delta} \le \varepsilon_{\mathrm{outer}}\) and \(r_{\mathrm{exp}} \le \varepsilon_{\mathrm{outer}}\)}{
+        \Return \(x^{r+1}\) \;
+    }
+
+    \BlankLine
+    \tcp{Residual surrogate used for penalty adaptation}
+    \[
+    E^{r+1} \leftarrow \min\{b - Bx^{r+1},\ p^r/\rho_r\}.
+    \]
+    \[
+    g_r \leftarrow \rho_0 (r+2)^{\alpha_{\mathrm{growth}}}.
+    \]
+    \If{\(\|E^r\|_\infty \le 10^{-12}\)}{
+        \If{\(\|E^{r+1}\|_\infty > 10^{-12}\)}{
+            \(\rho_{r+1} \leftarrow \max\{\xi_\rho \rho_r,\ g_r\}\) \;
+        }
+        \Else{
+            \(\rho_{r+1} \leftarrow \rho_r\) \;
+        }
+    }
+    \Else{
+        \If{\(\|E^{r+1}\|_\infty > \beta \|E^r\|_\infty\)}{
+            \(\rho_{r+1} \leftarrow \max\{\xi_\rho \rho_r,\ g_r\}\) \;
+        }
+        \Else{
+            \(\rho_{r+1} \leftarrow \rho_r\) \;
+        }
+    }
+
+    \BlankLine
+    \tcp{Proximal regularization update}
+    \[
+    \eta_{r+1}
+    \leftarrow
+    \max\!\left\{
+    \delta_\eta \|x^{r+1} - x^{\mathrm{init}}\|_2^2,\,
+    \eta_0 (r+2)^{\alpha_{\mathrm{growth}}}
+    \right\}.
+    \]
+
+    \BlankLine
+    \(E^r \leftarrow E^{r+1}\) \;
+    \(p^r \leftarrow p^{r+1}\) \;
+    \(x^r \leftarrow x^{r+1}\) \;
+    \(r \leftarrow r + 1\) \;
+}
+
+\BlankLine
+\Return \(x^r\) \;
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{\(\textsc{InnerFISTA}\): approximate primal subproblem solve}
+\label{alg:inner_fista_portfolio}
+\KwIn{Center \(x^r\); multipliers \(p^r\); penalty \(\rho_r\); proximal parameter \(\eta_r\); warm start \(\nu^{\mathrm{warm}}\); tolerance \(\varepsilon_{\mathrm{inner}}\)}
+\KwOut{Approximate minimizer \(x^{r+1}\); diagnostics}
+
+\BlankLine
+\tcp{Initialization}
+\[
+L_r \leftarrow 2 \sigma^2 \lambda_{\max}(\Sigma) + \rho_r \|B\|_2^2 + \eta_r^{-1},
+\qquad
+\tau_r \leftarrow \frac{1}{L_r \gamma}.
+\]
+\[
+x^{(0)} \leftarrow x^r,
+\qquad
+y^{(0)} \leftarrow x^r,
+\qquad
+a_0 \leftarrow 1.
+\]
+
+\BlankLine
+\For{\(t=0,1,2,\dots\)}{
+    \tcp{Gradient of the smooth model}
+    \[
+    \nabla \mathcal{L}_r(y^{(t)})
+    =
+    2 \sigma^2 \Sigma y^{(t)} - \mu
+    + B^\top [p^r + \rho_r(By^{(t)} - b)]_+
+    + \eta_r^{-1}(y^{(t)} - x^r).
+    \]
+
+    \BlankLine
+    \tcp{Gradient step}
+    \[
+    v^{(t)} \leftarrow y^{(t)} - \frac{1}{L_r}\nabla \mathcal{L}_r(y^{(t)}).
+    \]
+
+    \BlankLine
+    \tcp{Simplex-constrained proximal step}
+    \[
+    x^{(t+1)}
+    \leftarrow
+    \operatorname{prox}_{\tau_r g + \delta_{\Delta_n}}(v^{(t)}).
+    \]
+    Compute this prox by
+    \[
+    (x^{(t+1)}, \texttt{prox\_diag})
+    \leftarrow
+    \textsc{SimplexProx}(v^{(t)}, \tau_r, k, \nu^{\mathrm{warm}}).
+    \]
+    Update \(\nu^{\mathrm{warm}}\) from \(\texttt{prox\_diag.nu}\) \;
+
+    \BlankLine
+    \tcp{Stopping rule used in the code}
+    \[
+    r_{\mathrm{inner}} \leftarrow \|x^{(t+1)} - x^{(t)}\|_2.
+    \]
+    \If{\(r_{\mathrm{inner}} \le \varepsilon_{\mathrm{inner}}\)}{
+        \Return \(x^{(t+1)}\) and diagnostics \;
+    }
+
+    \BlankLine
+    \tcp{FISTA momentum}
+    \[
+    a_{t+1} \leftarrow \frac{1 + \sqrt{1 + 4 a_t^2}}{2},
+    \qquad
+    y^{(t+1)}
+    \leftarrow
+    x^{(t+1)}
+    +
+    \frac{a_t - 1}{a_{t+1}}(x^{(t+1)} - x^{(t)}).
+    \]
+}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{\(\textsc{SimplexProx}\): Moreau \(+\) PAVA \(+\) directional breakpoint walk}
+\label{alg:simplex_prox_portfolio}
+\KwIn{Vector \(v\); parameter \(\tau > 0\); budget parameter \(k\); warm start \(\nu^{\mathrm{warm}}\)}
+\KwOut{\(x = \operatorname{prox}_{\tau g + \delta_{\Delta_n}}(v)\); multiplier \(\nu^\star\)}
+
+\BlankLine
+\If{\(\tau = 0\)}{
+    \Return the Euclidean projection of \(v\) onto \(\Delta_n\) \;
+}
+
+\BlankLine
+\tcp{Step 1: bracket the simplex multiplier}
+Find \([\nu_L,\nu_R]\) such that
+\[
+\Phi(\nu_L) \ge 1 \ge \Phi(\nu_R),
+\qquad
+\Phi(\nu) := \mathbf{1}^\top \operatorname{prox}_{\tau g}(v-\nu \mathbf{1}).
+\]
+Use \(\nu^{\mathrm{warm}}\) as the first guess when available \;
+
+\BlankLine
+\tcp{Step 2: initialize the block structure at the right bracket}
+Sort \(v\) in descending order \;
+Form the shifted scaled vector \((v-\nu_R\mathbf{1})/\tau\) \;
+Run the stack-based PAVA routine to obtain the maximal block partition \;
+For each block, record its size, penalized-count, current regime, current
+fitted value, and current slope \;
+
+\BlankLine
+\tcp{Step 3: walk leftward in \(\nu\)}
+Set \(\nu \leftarrow \nu_R\) \;
+Evaluate the current affine value of \(\Phi(\nu)\) and its slope \;
+Create a heap of the next possible events: block regime changes and merges of
+adjacent blocks \;
+
+\BlankLine
+\While{the root has not yet been identified}{
+    \tcp{Between events, \(\Phi\) is affine}
+    \If{the affine root of \(\Phi(\nu)=1\) lies before the next queued event}{
+        set \(\nu^\star\) to that root and stop \;
+    }
+
+    \BlankLine
+    \tcp{Otherwise process the next event}
+    Pop the next valid event from the heap \;
+    Move \(\nu\) to that breakpoint \;
+    Update \(\Phi\), its slope, and the affected block data \;
+    \If{the event is a regime change}{
+        change only that block's regime and slope;
+        refresh merge candidates touching that block \;
+    }
+    \Else{
+        merge the two adjacent blocks into one larger block;
+        recompute that merged block's regime and slope;
+        refresh its neighboring candidates \;
+    }
+}
+
+\BlankLine
+\tcp{Step 4: reconstruct the primal vector}
+Evaluate the final block values at \(\nu^\star\) \;
+Expand block values back to the sorted coordinates \;
+Undo the sorting permutation and return the resulting \(x\) \;
+\end{algorithm}
+
+\paragraph*{What is integrated here.}
+The solver combines the following ingredients in one implementation:
+\begin{itemize}[topsep=0.3em,itemsep=0.2em]
+\item an outer proximal augmented Lagrangian loop for \(l \le Ax \le u\);
+\item an inner FISTA loop for the primal subproblem;
+\item exact evaluation of the free prox \(\operatorname{prox}_{\tau g}\) through
+Moreau decomposition;
+\item a stack-based PAVA routine for the conjugate-side prox;
+\item an exact directional breakpoint walk for the simplex multiplier;
+\item warm starts for the multiplier across repeated prox calls;
+\item adaptive updates of \(\rho_r\) and \(\eta_r\).
+\end{itemize}
+
+\paragraph*{Practical cost of the outer/inner nesting.}
+The pseudocode above suggests a full re-solve of \(\textsc{InnerFISTA}\) at
+every outer iteration, but the warm-starting built into the implementation
+makes the realized cost much lower than that reading implies. Two warm starts
+are carried across the nesting:
+\begin{itemize}[topsep=0.3em,itemsep=0.2em]
+\item the simplex multiplier \(\nu^{\mathrm{warm}}\) is carried both across
+successive \textsc{SimplexProx} calls \emph{within} an inner loop and across
+outer iterations \(r \to r+1\);
+\item the outer iterates \(x^r, p^r, \rho_r, \eta_r\) are carried into the
+next \(\textsc{InnerFISTA}\) call as its center and initialization.
+\end{itemize}
+Once \(\rho_r\) and \(\eta_r\) stop changing rapidly (a few outer rounds in,
+by the adaptation rules above), \(y^{(0)} = x^r\) is already close to the next
+fixed point, and \(\nu^{\mathrm{warm}}\) already brackets the next root of
+\(\Phi\) tightly. In that regime \textsc{InnerFISTA} typically terminates in a
+handful of iterations rather than resolving the subproblem from scratch, so
+the effective per-outer-iteration cost is close to one gradient step plus one
+\textsc{SimplexProx} call, not a full inner solve. The nested-loop structure
+is therefore considerably cheaper in practice than the worst-case reading of
+the pseudocode suggests.
+
+\paragraph*{Important implementation note.}
+The production routine does \emph{not} fall back to bisection if the breakpoint
+walk fails. The reference bisection method exists only as a testing oracle. If
+the event walk cannot locate the root, the implementation raises an error with
+diagnostics instead of silently switching algorithms.
+
+\end{document}

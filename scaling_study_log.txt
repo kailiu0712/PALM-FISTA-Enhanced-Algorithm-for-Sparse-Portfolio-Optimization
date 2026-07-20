@@ -1,0 +1,23 @@
+D:\lkh\Cornell\RA\Soorosh Shafiee\proximal\proximal_operator_validation\integrated_algorithm_for_portfolio_problem\solver.py:67: UserWarning: Objective contains too many subexpressions. Consider vectorizing your CVXPY code to speed up compilation.
+  problem = cp.Problem(cp.Minimize(objective), constraints)
+n=    8 k=   2 oracle=0.078s integrated=0.450s speedup=0.174 obj_err=1.35e-09 converged=True (instance wall time 0.5s, cumulative 0.5s)
+n=   12 k=   2 oracle=0.048s integrated=0.231s speedup=0.208 obj_err=2.19e-07 converged=True (instance wall time 0.3s, cumulative 0.8s)
+n=   20 k=   2 oracle=0.051s integrated=0.286s speedup=0.177 obj_err=4.33e-10 converged=True (instance wall time 0.3s, cumulative 1.1s)
+n=   30 k=   2 oracle=0.064s integrated=0.221s speedup=0.290 obj_err=1.31e-09 converged=True (instance wall time 0.3s, cumulative 1.4s)
+n=   45 k=   2 oracle=0.133s integrated=0.385s speedup=0.345 obj_err=5.66e-09 converged=True (instance wall time 0.5s, cumulative 1.9s)
+n=   65 k=   3 oracle=0.199s integrated=0.490s speedup=0.405 obj_err=2.26e-09 converged=True (instance wall time 0.7s, cumulative 2.6s)
+n=  100 k=   5 oracle=0.192s integrated=0.419s speedup=0.459 obj_err=7.19e-11 converged=True (instance wall time 0.6s, cumulative 3.3s)
+n=  150 k=   8 oracle=0.298s integrated=1.018s speedup=0.293 obj_err=7.87e-10 converged=True (instance wall time 1.3s, cumulative 4.6s)
+n=  225 k=  11 oracle=0.579s integrated=0.863s speedup=0.671 obj_err=3.45e-10 converged=True (instance wall time 1.5s, cumulative 6.0s)
+n=  350 k=  18 oracle=0.984s integrated=1.112s speedup=0.886 obj_err=2.34e-09 converged=True (instance wall time 2.1s, cumulative 8.2s)
+n=  500 k=  25 oracle=1.959s integrated=1.860s speedup=1.053 obj_err=2.42e-09 converged=True (instance wall time 3.9s, cumulative 12.0s)
+n=  700 k=  35 oracle=2.343s integrated=1.949s speedup=1.202 obj_err=5.52e-10 converged=True (instance wall time 4.4s, cumulative 16.4s)
+n= 1000 k=  50 oracle=4.346s integrated=3.537s speedup=1.229 obj_err=1.86e-10 converged=True (instance wall time 8.1s, cumulative 24.5s)
+n= 1500 k=  75 oracle=8.935s integrated=4.637s speedup=1.927 obj_err=8.28e-10 converged=True (instance wall time 14.1s, cumulative 38.6s)
+n= 2200 k= 110 oracle=25.209s integrated=7.658s speedup=3.292 obj_err=9.74e-10 converged=True (instance wall time 34.8s, cumulative 73.4s)
+n= 3200 k= 160 oracle=38.913s integrated=7.797s speedup=4.991 obj_err=4.63e-09 converged=True (instance wall time 53.2s, cumulative 126.6s)
+n= 4200 k= 210 oracle=65.548s integrated=10.735s speedup=6.106 obj_err=8.83e-10 converged=True (instance wall time 90.7s, cumulative 217.2s)
+n= 5000 k= 250 oracle=104.468s integrated=11.557s speedup=9.040 obj_err=2.76e-09 converged=True (instance wall time 133.6s, cumulative 350.9s)
+
+Saved table to D:\lkh\Cornell\RA\Soorosh Shafiee\proximal\proximal_operator_validation\integrated_algorithm_for_portfolio_problem\results\scaling_results.csv
+Saved plot to D:\lkh\Cornell\RA\Soorosh Shafiee\proximal\proximal_operator_validation\integrated_algorithm_for_portfolio_problem\results\scaling_plot.png
