@@ -32,8 +32,8 @@ Interpretation:
 The regularizer `g(x)` comes from the lifted perspective model
 
 $$
-g(x) = \tfrac12 \min_z \left\{ \sum_{i=1}^n \frac{x_i^2}{z_i} :
-z_i \in [0,1],\; z_i \ge x_i,\; \sum_{i=1}^n z_i \le k \right\}.
+g(x) = \tfrac12 \min_z \{ \sum_{i=1}^n \tfrac{x_i^2}{z_i} :
+z_i \in [0,1],\; z_i \ge x_i,\; \sum_{i=1}^n z_i \le k \}.
 $$
 
 So the implementation solves the reduced `x`-only problem while preserving the structure of the original sparse portfolio formulation.
