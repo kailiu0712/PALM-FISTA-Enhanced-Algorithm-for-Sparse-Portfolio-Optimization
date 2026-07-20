@@ -16,16 +16,9 @@ The code is designed to answer two practical questions:
 The solver minimizes
 
 $$
-\min_{x \in \mathbb{R}^n}
-\left\{
-\sigma^2 x^\top \Sigma x - \mu^\top x + \frac{1}{\gamma} g(x)
-\right\}
-\quad
-\text{s.t.}
-\quad
-x \ge 0,\;
-\mathbf{1}^\top x = 1,\;
-l \le Ax \le u.
+\min_{x \in \mathbb{R}^n} \{ \sigma^2 x^\top \Sigma x - \mu^\top x + \tfrac{1}{\gamma} g(x) \}
+\quad \text{s.t.} \quad
+x \ge 0,\; \mathbf{1}^\top x = 1,\; l \le Ax \le u.
 $$
 
 Interpretation:
@@ -39,16 +32,8 @@ Interpretation:
 The regularizer `g(x)` comes from the lifted perspective model
 
 $$
-g(x)
-=
-\frac12 \min_z
-\left\{
-\sum_{i=1}^n \frac{x_i^2}{z_i}
-:
-z_i \in [0,1],\;
-z_i \ge x_i,\;
-\sum_{i=1}^n z_i \le k
-\right\}.
+g(x) = \tfrac12 \min_z \left\{ \sum_{i=1}^n \frac{x_i^2}{z_i} :
+z_i \in [0,1],\; z_i \ge x_i,\; \sum_{i=1}^n z_i \le k \right\}.
 $$
 
 So the implementation solves the reduced `x`-only problem while preserving the structure of the original sparse portfolio formulation.
@@ -66,35 +51,17 @@ At a high level, each outer iteration does three things:
 The two-sided exposure constraints are rewritten as
 
 $$
-Bx - b \le 0,
-\qquad
-B =
-\begin{bmatrix}
-A \\
--A
-\end{bmatrix},
-\qquad
-b =
-\begin{bmatrix}
-u \\
--l
-\end{bmatrix}.
+Bx - b \le 0, \qquad
+B = \begin{bmatrix} A \\ -A \end{bmatrix}, \qquad
+b = \begin{bmatrix} u \\ -l \end{bmatrix}.
 $$
 
 For fixed outer variables `(x_center, p, rho, eta)`, the code minimizes the frozen objective
 
 $$
-F_r(x)
-=
-\sigma^2 x^\top \Sigma x - \mu^\top x
-+
-\frac{1}{\gamma} g(x)
-+
-\frac{1}{2\rho}\left(
-\|[p + \rho(Bx-b)]_+\|_2^2 - \|p\|_2^2
-\right)
-+
-\frac{1}{2\eta}\|x - x_{\mathrm{center}}\|_2^2.
+F_r(x) = \sigma^2 x^\top \Sigma x - \mu^\top x + \tfrac{1}{\gamma} g(x)
++ \tfrac{1}{2\rho} \big( \|[p + \rho(Bx-b)]_+\|_2^2 - \|p\|_2^2 \big)
++ \tfrac{1}{2\eta} \|x - x_{\mathrm{center}}\|_2^2.
 $$
 
 In plain language:
@@ -118,9 +85,8 @@ This is why the code stores both the prox iterates and the extrapolated points i
 The nontrivial step is
 
 $$
-\operatorname{prox}_{\tau g + \delta_{\Delta_n}}(v),
-\qquad
-\Delta_n = \{x \ge 0 : \mathbf{1}^\top x = 1\}.
+\mathrm{prox}_{\tau g + \delta_{\Delta_n}}(v), \qquad
+\Delta_n = \{ x \ge 0 : \mathbf{1}^\top x = 1 \}.
 $$
 
 The implementation computes it in three layers:
