@@ -59,9 +59,7 @@ $$
 For fixed outer variables `(x_center, p, rho, eta)`, the code minimizes the frozen objective
 
 $$
-F_r(x) = \sigma^2 x^\top \Sigma x - \mu^\top x + \tfrac{1}{\gamma} g(x)
-+ \tfrac{1}{2\rho} \big( \|[p + \rho(Bx-b)]_+\|_2^2 - \|p\|_2^2 \big)
-+ \tfrac{1}{2\eta} \|x - x_{\mathrm{center}}\|_2^2.
+F_r(x) = \sigma^2 x^\top \Sigma x - \mu^\top x + \tfrac{1}{\gamma} g(x) + \tfrac{1}{2\rho} \big( \|[p + \rho(Bx-b)]_+\|_2^2 - \|p\|_2^2 \big) + \tfrac{1}{2\eta} \|x - x_{\mathrm{center}}\|_2^2.
 $$
 
 In plain language:
