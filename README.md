@@ -265,8 +265,8 @@ In the saved scaling study with restart enabled, the average speed crossover app
 
 ## Bibliography
 
-1. Amir Beck and Marc Teboulle. *A Fast Iterative Shrinkage-Thresholding Algorithm for Linear Inverse Problems*. SIAM Journal on Imaging Sciences, 2(1):183-202, 2009. DOI: `10.1137/080716542`.
-2. Jefferson G. Melo, Renato D. C. Monteiro, and Hairong Wang. *A Proximal Augmented Lagrangian Method for Linearly Constrained Nonconvex Composite Optimization Problems*. Journal of Optimization Theory and Applications, 202(1):388-420, 2024. DOI: `10.1007/s10957-023-02218-z`.
+1. Adeyemi D. Adeoye, Puya Latafat, and Alberto Bemporad. *A proximal augmented Lagrangian method for nonconvex optimization with equality and inequality constraints*. arXiv preprint `arXiv:2509.02894`, 2025.
+2. Jiachang Liu, Soroosh Shafiee, and Andrea Lodi. *Scalable First-order Method for Certifying Optimal k-Sparse GLMs*. Proceedings of the 42nd International Conference on Machine Learning, Proceedings of Machine Learning Research 267:39455-39481, 2025.
 
 ## Reproducibility
 
